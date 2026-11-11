@@ -168,3 +168,8 @@ Gerçek uygulama Playwright ile sürülürken (vcan0 + 4 ecusim + mock0) bulundu
 - **Trafik paneli satır genişletme butonu** `aria-label` olarak panelin "Expand panel / Collapse" metnini kullanıyor.
 - **Durum çubuğu** bus arm edildikten sonra da "Connected Bus 2: vcan0 (Listen-Only)" mesajını göstermeye devam ediyor.
 - **Bus ID gösterimi** (düzeltildi, 24a4247): ECU grafı ve Session Setup 0 tabanlı bus id gösteriyordu.
+- **İngilizce arayüzde Türkçe metinler:** UDS Flow varsayılan diyagram adı "YENİ DİYAGRAM"; Simulation
+  "Generate draft from DBC" önizlemesi "Önizleme: Seçili kriterlerde sinyal bulunamadı (0 bileşen oluşturulacak)."
+- **Bus etiketi karmaşası (Simulation):** aynı bus "CAN0 · Bus 1 (mock0) (BUS 0)" olarak üç farklı numarayla yazılıyor.
+- **Trafik paneli:** "OBD-II PID" kaynak rozeti ORIGIN sütununa sığmıyor, ADDR sütununun üstüne taşıyor.
+- **Cloud sekmesi** sunucu olmadan yalnızca `localhost:3000` giriş formu gösteriyor → v0.1'de deneysel bayrak arkasına alınacak.
