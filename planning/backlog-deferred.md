@@ -155,3 +155,16 @@ Kullanıcı notu: farklı yöntemler (helper, HTTPS, HSM, DLL) **henüz hiç den
 - **Çalışma zamanında doğrulanmadı:** Traffic Dock 60 FPS (Live PIDs açıkken), newest-first kaydırma sabitleme,
   maximize sonrası Flow canvas yeniden ölçümü. `src-tauri` bu makinede derlenmedi (GTK/glib dev paketleri yok) →
   `cmd_diag_discover_ecus`, `cmd_diag_get_isotp_frames`, `origin` argümanları desktop'ta derlenip denenmeli.
+
+---
+
+## D-008 · README çekimi sırasında bulunan hatalar (2026-11-12)
+Gerçek uygulama Playwright ile sürülürken (vcan0 + 4 ecusim + mock0) bulundu.
+- **Trace kayıt sırasında boş:** "Start Trace" sonrası tampon dolarken (ör. 3.934 frame) tablo hiç satır göstermiyor;
+  satırlar yalnızca "Stop" sonrası geliyor. Canlı trace görünümü çalışmıyor.
+- **Soğuk açılışta sahte "PANIC LATCHED":** `src/App.tsx` (~131) kurtarılacak oturum yoksa güvenli sıfırlama için
+  `cmd_panic_stop_tx` çağırıyor → her açılışta kırmızı PANIC / "TX LOCKED (PANIC)" yanıyor (alarm yorgunluğu).
+  Öneri: sıfırlamayı latch'lemeyen bir yolla yap (ör. disarm + scheduler/replay temizliği) ya da sıfırlama sonrası latch'i temizle.
+- **Trafik paneli satır genişletme butonu** `aria-label` olarak panelin "Expand panel / Collapse" metnini kullanıyor.
+- **Durum çubuğu** bus arm edildikten sonra da "Connected Bus 2: vcan0 (Listen-Only)" mesajını göstermeye devam ediyor.
+- **Bus ID gösterimi** (düzeltildi, 24a4247): ECU grafı ve Session Setup 0 tabanlı bus id gösteriyordu.
