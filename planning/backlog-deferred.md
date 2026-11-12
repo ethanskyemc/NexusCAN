@@ -173,3 +173,5 @@ Gerçek uygulama Playwright ile sürülürken (vcan0 + 4 ecusim + mock0) bulundu
 - **Bus etiketi karmaşası (Simulation):** aynı bus "CAN0 · Bus 1 (mock0) (BUS 0)" olarak üç farklı numarayla yazılıyor.
 - **Trafik paneli:** "OBD-II PID" kaynak rozeti ORIGIN sütununa sığmıyor, ADDR sütununun üstüne taşıyor.
 - **Cloud sekmesi** sunucu olmadan yalnızca `localhost:3000` giriş formu gösteriyor → v0.1'de deneysel bayrak arkasına alınacak.
+- **TX paneli:** "VIRTUAL"/"HW/SW LISTEN-ONLY" rozeti eklenince bus adı ("Bus 1 · mock0") "Bu…" diye kesiliyor; satır düzeni genişletilmeli.
+- **Proje açma onayı:** güvenlik düzeltmesiyle kullanıcının kendi kaydettiği projeleri de açınca otomatik bağlantı yok, "Connect (Listen-Only)" onayı isteniyor. Karar bekliyor: böyle kalsın mı, kendi projeleri onaysız (yine Listen-Only) bağlansın mı.
