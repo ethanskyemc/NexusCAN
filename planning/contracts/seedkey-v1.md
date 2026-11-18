@@ -32,7 +32,7 @@ to providers and carry known test vectors. Flow files reference `profileId` only
 | `cmd_seedkey_compute` | `{ request: ComputeKeyRequestDto }` | `ComputeKeyResultDto` |
 | `cmd_seedkey_compute_adhoc` | `{ provider, level, seedHex }` | `ComputeKeyResultDto` (test unsaved form) |
 | `cmd_seedkey_run_test_vectors` | `{ profileId }` | `TestVectorReportDto` |
-| `cmd_seedkey_probe_library` | `{ path }` | `SeedKeyLibraryInfoDto` (never loads/executes the file) |
+| `cmd_seedkey_probe_library` | `{ path }` | `SeedKeyLibraryInfoDto` (app never loads the file; header read in-app, export probe in the helper process) |
 
 Errors: string `"[seedkey:<code>] <message>"` (`SeedKeyError::to_ipc_string`). Bridge: HTTP 400 with that string
 through the existing `bad_request` path. HMI: `parseSeedKeyError()`.
@@ -51,12 +51,24 @@ through the existing `bad_request` path. HMI: `parseSeedKeyError()`.
 - `run_test_vectors`: evaluates all vectors, never short-circuits; `manual` vectors → outcome with `manual_required` error.
 
 ## 4. Native providers + policy (backend-dev)
-- library: inspect PE/ELF/Mach-O header first; arch ≠ host → `BitnessMismatch` (32-bit helper process is NOT in v1;
-  note says so). Prefer `GenerateKeyExOpt` when `options` set, else `GenerateKeyEx`. ABI:
+- library (**v1.1 — out-of-process, team-lead decision**): vendor libraries are NEVER loaded in-process.
+  `nexus-seedkey-native` validates the path (absolute, regular file, `.dll`/`.so[.N]`/`.dylib`), reads the
+  PE/ELF/Mach-O header WITHOUT loading it, and spawns the matching helper `nexus-seedkey-host32` / `nexus-seedkey-host64`
+  (lookup: next to `current_exe`, then `NEXUS_SEEDKEY_HOST_DIR`; dev build name `nexus-seedkey-host` accepted for the
+  native flavour). Helper missing → `BitnessMismatch` with an actionable message.
+  Helper protocol: one JSON line on stdin (`{"op":"compute"|"probe",...}`), one JSON line on stdout, exit
+  (0 ok, 2 handled error, other = library crashed). Cleared env, cwd = library dir, timeout 5 s (child killed),
+  stdout ≤ 64 KiB. A crashing vendor DLL only kills the helper.
+  Prefer `GenerateKeyExOpt` when `options` set, else `GenerateKeyEx`. ABI (Vector AN-IDG-1-017):
   `int GenerateKeyEx(const u8* seed, u32 seedLen, u32 level, const char* variant, u8* key, u32 maxKeyLen, u32* actualKeyLen)`
   `int GenerateKeyExOpt(const u8* seed, u32 seedLen, u32 level, const char* variant, const char* options, u8* key, u32 maxKeyLen, u32* actualKeyLen)`
-  return 0 = OK; non-zero → `LibraryCall{code}`; `actualKeyLen > maxKeyLen` → `LibraryCall`. Libraries cached per canonical path.
-  Call on a worker thread with timeout (on timeout return `Timeout`; the thread is leaked and logged).
+  return 0 = OK; non-zero → `LibraryCall{code}`; `actualKeyLen > maxKeyLen`, crash or malformed helper reply →
+  `LibraryFault` (wire code `library_call`). On 32-bit x86 the helper calls through an SP-restoring trampoline so both
+  cdecl and stdcall exports work; decorated names `_GenerateKeyEx@28` / `_GenerateKeyExOpt@32` are also tried.
+  Packaging: one cargo bin renamed to `…host64` (native) and `…host32` (i686 build) via Tauri `bundle.externalBin`.
+  `cmd_seedkey_probe_library` reads the header in-app; export detection runs inside the helper.
+  Capabilities add `nativeKindsAvailable`, `libraryHost32Found`, `libraryHost64Found`.
+  Library paths are local-only data: never part of cloud sync payloads.
 - external_process: `std::process::Command` (no shell), cleared env except PATH/SystemRoot, timeout + kill, stdout ≤ 64 KiB.
 - http: POST JSON, rustls, timeout, response ≤ 64 KiB.
 - **Policy:** Tauri desktop → native allowed. Bridge → native kinds (compute, adhoc, save, probe) allowed ONLY when
