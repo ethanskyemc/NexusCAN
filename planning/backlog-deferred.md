@@ -131,7 +131,7 @@ Kullanıcı notu: farklı yöntemler (helper, HTTPS, HSM, DLL) **henüz hiç den
   `nexus-cli`; sürümlü + kimlik doğrulamalı API gerekir (bugün bridge yerel ağda kimlik doğrulamasız → ayrı güvenlik konusu).
 
 ### Bilinen mevcut sorun (D-002'deki madde ile aynı, tekrar teyit edildi)
-- `src/components/diagnostics/uds-flow/flowAlgos.ts:106` `custom` algoritma `new Function` ile ana webview'da, IPC erişimli
+- `src/components/flow/flowAlgos.ts:106` `custom` algoritma `new Function` ile ana webview'da, IPC erişimli
   çalışıyor. Ayrıca desktop CSP (`default-src 'self'`, `unsafe-eval` yok) nedeniyle desktop'ta büyük olasılıkla çalışmıyor,
   tarayıcı modunda çalışıyor (desktop'ta denenmedi; GTK eksik). Bu sistem gelince kaldırılacak.
 
