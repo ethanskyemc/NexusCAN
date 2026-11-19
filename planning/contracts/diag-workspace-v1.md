@@ -3,6 +3,8 @@
 Status: **APPROVED by user (2026-11-18)**. Supersedes rev 1 (same file). Overrides `flow-platform-v1.md`
 where §8 / §9 below say so; otherwise `flow-platform-v1.md`, `seedkey-v1.md`, `uds-client-d003-v1.md` still apply.
 
+> **Amended 2026-11-19 by `flow-interface-v2.md`:** `flow_input`/`flow_output` → `flow_start` + `flow_in` × N + `flow_out` × N + `flow_return`; `FlowInterfaceV1` outputs are flow-level; bindable block parameters; Flow Editor = block workshop, Workbench = operation.
+
 Frozen code contracts (change = update BOTH sides + notify team-lead):
 - TS: `src/types/diagWorkspace.ts`, `src/types/flowLibrary.ts`, `src/types/runRecord.ts`
 - Rust mirror: `crates/nexus-hal/src/flowlib.rs`, `crates/nexus-hal/src/runstore.rs` (serde camelCase)
