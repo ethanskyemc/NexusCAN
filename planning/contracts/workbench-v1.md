@@ -1,6 +1,6 @@
 # Workbench v1 — Phase C1 (team-lead contract)
 
-Status: **DRAFT — scope agreed with user 2026-11-19 (Phase C split into C1 / C2); details to confirm at C1 start.**
+Status: **DRAFT — scope agreed with user 2026-11-19 (Phase C split into C1 / C2); §8 decisions answered 2026-11-19.**
 Builds on `diag-workspace-v1.md` (§4 bindings, §5 `{ecu.*}`, §10 run store, §11 safety) and
 `flow-interface-v2.md` (Flow = Block, §8 Workbench outline). Those stay authoritative where not overridden here.
 
@@ -36,9 +36,8 @@ fill parameters, run, see results and run records. Production runs and reports c
 ## 4. Data
 - `FlowBindingV1` (existing, project file): `{ id, ecuId, flowRef, label, params, order }`.
   - **Additive:** `fileExpect?: Record<string, { fileName: string; crc32: string /* 8 hex upper */ }>` — expected
-    firmware per `file` input key. Bytes are NEVER stored; chosen at run time; CRC mismatch refuses the run
-    (operator may explicitly "accept different file" → recorded in the run record `errorMessage: null`, file ref
-    shows the actual CRC; the expectation is not silently updated).
+    firmware per `file` input key. Bytes are NEVER stored; chosen at run time; **CRC mismatch always refuses the
+    run** (no "accept different file" override in C1 — §8.2). Changing the expectation = editing the binding.
   - `params[key]` = literal (`string | number | boolean`) **or** a string that is exactly one `{ecu.<path>}`
     reference (resolved per row ECU with the existing `resolveEcuRefs`; unresolvable = cell shows the error,
     run refused). Update `diagnosticsSanitize.ts` + `ecuValidation.ts` accordingly; old files load unchanged.
@@ -68,7 +67,7 @@ fill parameters, run, see results and run records. Production runs and reports c
 5. Record: build `RunRecordV1` (outcome map: run outcome `ok|fail|error` → same; stopped by user → `aborted`;
    Panic Stop → `panic_stop`; `outputName` = reached `flow_return` name; numeric/text outputs as `RunValue`,
    bytes → hex string; files → `RunFileRefV1`; `ecuSnapshotHash` = sha-256 of canonical ECU record;
-   `durationMs` = `Math.round`; log excerpt ≤ 200 × 512). Append failure = visible error, run result still shown.
+   `durationMs` = `Math.round`; log excerpt ≤ 200 × 512; `operator: null` in C1 — §8.3). Append failure = visible error, run result still shown.
 6. Cell display: outcome chip (`ok` nominal, `safe_abort`/other `fail` warn, `bootloader_fail` **critical with
    text "ECU bootloader'da olabilir"**, `error` critical), short outputs, timestamp. `font-mono tabular-nums`.
 
@@ -87,7 +86,7 @@ blok kaydedin").
 - Gate: `npx tsc -p tsconfig.app.json --noEmit`, `test:workbench`, `test:workbench-qa`, all existing flow +
   diag tests green; `cargo test -p nexus-hal` only if backend touched.
 
-## 8. Open questions for the user at C1 start
-1. Workbench as a Diagnostics sub-tab (proposed) or a top-level area?
-2. "Accept different file" on CRC mismatch: allowed (recorded) or never allowed?
-3. Operator name in run records: free text set once per session (proposed) or empty until Cloud identity?
+## 8. Decisions (user, 2026-11-19: "sadece 1 olsun şimdilik")
+1. **Workbench = Diagnostics sub-tab** (`DiagSubTab` `workbench`, right after `ecu_registry`). ✅ in C1.
+2. "Accept different file" on CRC mismatch: **not in C1** — a mismatch always refuses the run. May be revisited later.
+3. Operator name in run records: **not in C1** — `operator: null`. May be revisited later (or filled by Cloud identity).
