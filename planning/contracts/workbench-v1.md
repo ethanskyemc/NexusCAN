@@ -90,3 +90,107 @@ blok kaydedin").
 1. **Workbench = Diagnostics sub-tab** (`DiagSubTab` `workbench`, right after `ecu_registry`). ✅ in C1.
 2. "Accept different file" on CRC mismatch: **not in C1** — a mismatch always refuses the run. May be revisited later.
 3. Operator name in run records: **not in C1** — `operator: null`. May be revisited later (or filled by Cloud identity).
+
+## 9. Implementation API (team-lead, 2026-11-19 — FROZEN for QA probes + frontend-dev)
+Backend check: `cmd_run_append|query|latest` registered (`lib.rs`, `app_commands.rs`) and allowed by permission set
+`workspace` (`capabilities/default.json`) → **no backend work in C1**.
+
+### 9.1 `src/types/diagWorkspace.ts` (additive)
+`FlowBindingV1.fileExpect?: Record<string, FileExpectV1>`; `export interface FileExpectV1 { fileName: string; crc32: string }`
+(8 hex upper). Sanitizer drops malformed entries (crc not `/^[0-9A-F]{8}$/` after upper-casing) with a visible note.
+
+### 9.2 `src/components/flow/FlowEngine.ts` (additive)
+`FlowRunOptions.rootBody?: FlowDiagram` — when set the engine runs this diagram as the root frame and **never reads
+or writes `flowStore`** (diagram, block statuses, run log, selection) during that run; log lines go to
+`FlowRunOptions.onLog?: (line: string) => void`. Without `rootBody` behaviour is unchanged (canvas).
+
+### 9.3 `src/components/diagnostics/workbench/workbenchModel.ts` (pure: no React, no Tauri, no stores)
+```ts
+export type WbFieldKind = 'number' | 'text' | 'bool' | 'bytes' | 'hex' | 'select' | 'file';
+export interface WbFormField { key: string; label: string; kind: WbFieldKind; required: boolean; order: number;
+  unit?: string; min?: number; max?: number; byteLength?: number; options?: { value: string; label: string }[];
+  accept?: string[]; defaultValue?: string | number | boolean | null }
+export function isBindableInterface(iface: FlowInterfaceV1): boolean;          // has an input of type 'ecu'
+export function buildBindingForm(iface: FlowInterfaceV1): WbFormField[];       // inputs order, 'ecu' excluded
+export type WbParamIssue = { key: string; code: 'missing' | 'type' | 'range' | 'ecu_ref' | 'unknown_key'; message: string };
+export type WbResolved =
+  | { status: 'ready'; params: Record<string, RunValue> }                      // non-file inputs, resolved
+  | { status: 'incomplete'; missing: string[]; issues: WbParamIssue[] }        // required w/o value (incl. file w/o fileExpect)
+  | { status: 'invalid'; issues: WbParamIssue[] };                             // bad literal / unresolvable {ecu.*}
+export function resolveBindingParams(binding: FlowBindingV1, iface: FlowInterfaceV1, ecu: EcuRecordV1): WbResolved;
+export interface WbReconcileResult { binding: FlowBindingV1; dropped: string[]; newlyMissing: string[] }
+export function reconcileBindingToRevision(binding: FlowBindingV1, next: FlowInterfaceV1, nextRevision: number): WbReconcileResult;
+export function crc32Hex(bytes: Uint8Array): string;                           // IEEE, 8 hex upper, wraps flowAlgos.crc32
+export type WbFileCheck = { ok: true; ref: RunFileRefV1 } | { ok: false; key: string; expected: string; actual: string };
+export function checkFileExpectation(binding: FlowBindingV1, key: string, file: FlowFileValue): WbFileCheck;
+export interface WbReviewItem { path: string; blockType: string }              // path "Flash ECU › Programming › Erase FF00"
+export function reviewItems(body: FlowDiagram, rootName: string, loadCallee: (ref: FlowRefV1) => FlowDiagram | null): WbReviewItem[];
+export type WbCellView = { chip: 'none' | 'ok' | 'warn' | 'critical'; text: string };  // bootloader_fail → critical + i18n "ECU bootloader'da olabilir"
+export function cellView(rec: RunRecordV1 | null): WbCellView;
+export function mapOutcome(r: { outcome: 'ok' | 'fail' | 'error'; stopped: boolean }, stopKind: 'user' | 'panic' | null): RunOutcome;
+export interface WbRecordInput { runId: string; projectId: string; vehicleId: string | null; ecu: EcuRecordV1;
+  flowId: string; flowRevision: number; flowContentHash: string; flowName: string; params: Record<string, RunValue>;
+  files: RunFileRefV1[]; startedAtMs: number; endedAtMs: number; result: FlowRunResult; stopKind: 'user' | 'panic' | null;
+  log: string[]; deviceId: string; appVersion: string; ecuSnapshotHash: string }
+export function buildRunRecord(i: WbRecordInput): RunRecordV1;  // durationMs Math.round, bytes→hex upper, log ≤200×512 (tail), operator null, parentRunId/queueId null
+export function ecuSnapshotHash(ecu: EcuRecordV1): Promise<string>; // sha-256 hex of canonicalJson(ecu) (ecuRefs.ts)
+```
+
+### 9.4 `src/components/diagnostics/workbench/workbenchRunner.ts` (no React; deps injected)
+```ts
+export interface WbRunDeps {
+  loadRevision(ref: FlowRefV1): Promise<{ body: FlowDiagram; iface: FlowInterfaceV1; name: string; contentHash: string } | null>;
+  loadCallee(ref: FlowRefV1): FlowDiagram | null;
+  transportFor(ecu: EcuRecordV1): FlowTransport | null;   // null = no connected session → refuse 'no_session'
+  isRunActive(): boolean;                                   // another Workbench run active → refuse 'busy'
+  confirmReview(items: WbReviewItem[], ecu: EcuRecordV1, files: RunFileRefV1[]): Promise<boolean>;
+  appendRecord(rec: RunRecordV1): Promise<void>;
+  now(): number; uuid(): string; deviceId: string; appVersion: string; projectId: string; vehicleId: string | null;
+}
+export type WbRefusal = { code: 'incomplete' | 'invalid' | 'revision_missing' | 'protocol' | 'crc_mismatch' | 'busy'
+  | 'no_session' | 'review_declined'; message: string };
+export interface WbRunHandle { stop(): void; done: Promise<WbRunResult> }
+export type WbRunResult = { kind: 'refused'; refusal: WbRefusal }                      // zero TX guaranteed
+  | { kind: 'ran'; record: RunRecordV1; appendError: string | null };
+export function startWorkbenchRun(binding: FlowBindingV1, ecu: EcuRecordV1,
+  files: Record<string, FlowFileValue>, deps: WbRunDeps): WbRunHandle;
+```
+Order: §5.1 preconditions (all, before transport is touched) → review gate (only if `reviewItems` non-empty) →
+dedicated `new FlowEngine().run({ rootBody, ecu, inputs, transport, resolveCallee, rootId, rootName })`.
+`stop()` → engine.stop(), stopKind `user`; global Panic Stop reaches the engine via the existing tx-source registry
+(`stopAllTxSources`) → stopKind `panic` (runner detects it through a hook exported by `store/txSources` or by
+registering itself as a tx source — one code path, no second Panic Stop implementation).
+
+### 9.5 Other files
+`src/services/runStoreClient.ts` (`runAppend/runQuery/runLatest`, browser-bridge in-memory fallback like
+`flowLibClient.ts`); `src/store/workbenchStore.ts` or a slice in `diagWorkspaceStore.ts` (latest records per
+`(ecuId, flowId)`, active run handle); UI `src/components/diagnostics/workbench/{WorkbenchPanel,WorkbenchMatrix,
+BindingForm,RunRecordDetail,ReviewDialog}.tsx`; shared field components extracted from `RunInputsDialog.tsx`.
+
+## 10. Amendments
+- 2026-11-19 (team-lead, QA probe review — §9 ambiguities resolved):
+  1. `{ecu.*}` into a `number` input: resolved string is parsed (dec or `0x` hex) and range-checked; non-numeric →
+     `type`, out of [min,max] → `range`. Never clamped.
+  2. `reviewItems`: any `uds_routine_ctrl` whose routine id is an `{ecu.*}` reference is flagged (conservative; the
+     path shows the reference). `custom` routine id `FF00` (case-insensitive) counts as erase.
+  3. `WbRefusal.code` gains `'file_missing'` (required file input not chosen at run time) and `'stopped'`
+     (Stop / Panic Stop before the engine started, e.g. while the review dialog is open). Both: zero TX, no record.
+  4. `unknown_key` (param key not in the interface): reported as an issue, does NOT change status, never in params;
+     the UI shows it as a note.
+  5. Required `text` / `hex` / `bytes` with `""` = missing.
+  6. `durationMs = Math.max(0, Math.round(endedAtMs - startedAtMs))`.
+  7. `reconcile.dropped` lists removed param keys AND removed `fileExpect` keys (deduped, sorted).
+  8. File name differs but CRC matches → allowed; record uses the chosen file's name; UI shows a non-blocking note.
+  9. `mapOutcome({ outcome: 'error', stopped: true }, null)` → `'aborted'`.
+  10. `WbResolved` `ready` variant gains `notes: WbParamIssue[]` (always present, `[]` when none) carrying
+      `unknown_key` (and any other non-blocking note) for the UI.
+- 2026-11-19 (team-lead, C1 delivery review — accepted deviations): store file is `src/store/diagWorkbenchStore.ts`
+  (`workbenchStore.ts` was taken by the explorer dock); matrix windowing is in-house (no virtualizer dependency);
+  `reviewItems` flags the real type `uds_req_download` as well; `loadCallee` stays sync — callees are preloaded in
+  `loadRevision`; Workbench refuses to run in Diagnostics DEMO mode and without `projectId` (no fabricated production
+  records); `appVersion` is a constant until a build-time version exists; `deviceId` = persisted UUID.
+  Known C2 follow-up: `FlowEngine.stop()` also cancels global flash runs / prompts, so a Workbench Stop cancels a Flow
+  Editor flash in flight — scope it per engine before C2 parallel runs.
+- C1 gate PASS (2026-11-19): tsc clean; test:workbench 32/32; test:workbench-qa 14/14 probes (251 checks); flasher,
+  flowcore, flowreg, flownest, terminals, flowiface, flowiface-qa, diagws, decode, traffic, graph, inflight, flash, hwlo green.
+  Backend untouched. UI not yet exercised in a running app.
