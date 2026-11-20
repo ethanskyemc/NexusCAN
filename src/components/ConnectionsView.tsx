@@ -316,7 +316,7 @@ const OS_DRIVER_REFERENCE: Record<
           description:
             'macCAN provides user-space PCAN-Basic compatible dynamic library for macOS.',
           commandOrAction: 'brew install mac-can/maccan/pcbusb',
-          docUrl: 'https://github.com/cliffrubio/macOS-CAN-Drivers/tree/main/KvaserUSB',
+          docUrl: 'https://www.mac-can.com/',
         },
       ],
     },
